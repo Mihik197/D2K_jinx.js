@@ -22,7 +22,7 @@ with st.expander("How to use this app"):
     1. Upload a financial document using the sidebar (supports PDF, CSV, Excel)
     2. Ask a question about the document in the chat
     3. For the initial question, provide context such as: "Analyze this financial statement" or "What are the key financial metrics?"
-    
+
     **Example Questions:**
     - "Analyze this financial statement and provide key metrics"
     - "What is the company's current ratio?"
@@ -48,26 +48,34 @@ with st.sidebar:
         type=["pdf", "csv", "xlsx", "xls"],
         help="Upload a financial document to analyze"
     )
-    
+
     if uploaded_file is not None:
         st.success(f"File '{uploaded_file.name}' is ready for analysis")
-    
+
     # Show all documents in the current session
     if st.session_state.documents:
         st.header("Uploaded Documents")
         for doc in st.session_state.documents:
             st.info(f"📄 {doc}")
-    
+
     st.header("About")
     st.markdown("This is a prototype for an AI-driven Financial Statement Analysis Platform.")
     st.markdown("You can chat with the AI or upload documents for analysis.")
-    
+
     # Add a button to clear the conversation
     if st.button("Clear Conversation"):
         st.session_state.messages = []
         st.session_state.session_id = None
         st.session_state.documents = []
         st.experimental_rerun()
+
+    # Add the team credit message here
+    st.markdown("---") # Optional separator
+    st.markdown("Built by **Team Jinx.js**:")
+    st.markdown("- Mihik Chaudhari")
+    st.markdown("- Bhavya Goyal")
+    st.markdown("- Krishna Naudiyal")
+
 
 # -------------------------------
 # New section for Detailed Analysis & Report Generation at the top
@@ -87,8 +95,10 @@ if st.button("Run Analysis"):
         with st.spinner("Generating analysis and report..."):
             try:
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                # Use environment variable for backend URL or default to localhost
+                backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
                 response = httpx.post(
-                    "http://127.0.0.1:8000/generate_report",
+                    f"{backend_url}/generate_report",
                     files=files,
                     timeout=120.0
                 )
@@ -108,10 +118,12 @@ if st.button("Run Analysis"):
                         "Extracted Data:\n[JSON with extracted financial data...]\n\n"
                         "Calculated Ratios:\n[JSON with calculated ratios...]"
                     )
-                    with st.expander("View Analysis Details"):
+                    with st.expander("View Analysis Details (Placeholder - Download PDF for full report)"):
                         st.text(analysis_details)
                 else:
                     st.error(f"Error generating report: {response.status_code}\n{response.text}")
+            except httpx.ConnectError as ce:
+                st.error(f"Connection Error: Could not connect to the backend service at {backend_url}. Please ensure the backend is running.")
             except Exception as e:
                 st.error(f"Exception during analysis: {str(e)}")
 
@@ -119,12 +131,15 @@ if st.button("Run Analysis"):
 # Chat interface (moved to the bottom)
 st.header("Chat with the AI")
 
+# Use environment variable for backend URL or default to localhost
+backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
+
 # Function to handle regular chat
 def process_chat(prompt):
     try:
         with st.spinner("Thinking..."):
             response = httpx.post(
-                "http://127.0.0.1:8000/chat",
+                f"{backend_url}/chat",
                 json={
                     "messages": [{"role": "user", "content": prompt}],
                     "session_id": st.session_state.session_id
@@ -138,6 +153,9 @@ def process_chat(prompt):
             else:
                 st.error(f"Error: {response.text}")
                 return f"Error communicating with backend: {response.status_code}"
+    except httpx.ConnectError as ce:
+         st.error(f"Connection Error: Could not connect to the backend service at {backend_url}. Please ensure the backend is running.")
+         return f"Connection Error: Could not connect to the backend at {backend_url}"
     except Exception as e:
         st.error(f"Error: {str(e)}")
         return f"Error: {str(e)}"
@@ -152,7 +170,7 @@ def process_document_chat(file, prompt):
                 "session_id": st.session_state.session_id if st.session_state.session_id else "",
             }
             response = httpx.post(
-                "http://127.0.0.1:8000/upload_document",
+                f"{backend_url}/upload_document",
                 files=files,
                 data=form_data,
                 timeout=120.0
@@ -166,6 +184,9 @@ def process_document_chat(file, prompt):
             else:
                 st.error(f"Error: {response.text}")
                 return f"Error processing document: {response.status_code}"
+    except httpx.ConnectError as ce:
+         st.error(f"Connection Error: Could not connect to the backend service at {backend_url}. Please ensure the backend is running.")
+         return f"Connection Error: Could not connect to the backend at {backend_url}"
     except Exception as e:
         st.error(f"Error: {str(e)}")
         return f"Error: {str(e)}"
@@ -182,13 +203,19 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
+
     # If a new file was uploaded earlier and not already processed, use it
     if uploaded_file and uploaded_file.name not in st.session_state.documents:
         response_text = process_document_chat(uploaded_file, prompt)
+        # Re-run to update the sidebar with the new document name immediately
+        st.experimental_rerun()
     else:
         response_text = process_chat(prompt)
-    
+
     with st.chat_message("assistant"):
         st.markdown(response_text)
     st.session_state.messages.append({"role": "assistant", "content": response_text})
+
+    # Re-run only if it wasn't a document upload chat, to avoid double rerun
+    if not (uploaded_file and uploaded_file.name in st.session_state.documents):
+         st.experimental_rerun()
