@@ -4,10 +4,7 @@ import json
 from typing import List, Dict
 import time
 import os
-import pkg_resources
 
-# Check for Streamlit version to handle rerun function appropriately
-st_version = pkg_resources.get_distribution("streamlit").version
 use_rerun = True  # Default to using st.rerun() for newer versions
 
 backend_url = os.environ.get("BACKEND_URL", "https://my-financial-app-backend.onrender.com")
