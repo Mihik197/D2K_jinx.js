@@ -206,15 +206,20 @@ if prompt:
     # If a new file was uploaded earlier and not already processed, use it
     if uploaded_file and uploaded_file.name not in st.session_state.documents:
         response_text = process_document_chat(uploaded_file, prompt)
-        # Re-run to update the sidebar with the new document name immediately
+        # Add the document to the list before showing response
+        if uploaded_file.name not in st.session_state.documents:
+            st.session_state.documents.append(uploaded_file.name)
+            
+        # Display the response
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        
+        # Only rerun after displaying the response to update sidebar
         st.rerun()
     else:
         response_text = process_chat(prompt)
-
-    with st.chat_message("assistant"):
-        st.markdown(response_text)
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
-
-    # Re-run only if it wasn't a document upload chat, to avoid double rerun
-    if not (uploaded_file and uploaded_file.name in st.session_state.documents):
-         st.rerun()
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        st.rerun()
