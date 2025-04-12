@@ -10,6 +10,8 @@ import pkg_resources
 st_version = pkg_resources.get_distribution("streamlit").version
 use_rerun = True  # Default to using st.rerun() for newer versions
 
+backend_url = os.environ.get("BACKEND_URL", "https://my-financial-app-backend.onrender.com")
+
 st.set_page_config(
     page_title="Financial Statement Analyzer",
     page_icon="📊",
@@ -100,8 +102,6 @@ if st.button("Run Analysis"):
         with st.spinner("Generating analysis and report..."):
             try:
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-                # Use environment variable for backend URL or default to localhost
-                backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
                 response = httpx.post(
                     f"{backend_url}/generate_report",
                     files=files,
@@ -135,9 +135,6 @@ if st.button("Run Analysis"):
 # -------------------------------
 # Chat interface (moved to the bottom)
 st.header("Chat with the AI")
-
-# Use environment variable for backend URL or default to localhost
-backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
 
 # Function to handle regular chat
 def process_chat(prompt):
