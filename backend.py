@@ -14,7 +14,7 @@ import json
 import re
 from fastapi.responses import FileResponse
 from report_generator import generate_pdf_report
-from prompts import EXTRACTION_PROMPT
+from prompts import EXTRACTION_PROMPT, FINANCIAL_EXPERT_PROMPT
 import time
 
 load_dotenv()
@@ -65,7 +65,12 @@ async def chat(request: ChatRequest):
         
         # Initialize chat session if needed
         if session_id not in chat_sessions:
-            chat_sessions[session_id] = client.chats.create(model='gemini-2.0-flash')
+            # Create chat with system instruction to be more confident
+            chat_sessions[session_id] = client.chats.create(
+                model='gemini-2.0-flash',
+                config=types.GenerateContentConfig(
+                    system_instruction=FINANCIAL_EXPERT_PROMPT),
+            )
             session_history[session_id] = []
             session_documents[session_id] = []
         
@@ -138,7 +143,12 @@ async def upload_document(
         
         # Initialize chat session if needed
         if session_id not in chat_sessions:
-            chat_sessions[session_id] = client.chats.create(model='gemini-2.0-flash')
+            # Create chat with system instruction to be more confident
+            chat_sessions[session_id] = client.chats.create(
+                model='gemini-2.0-flash',
+                config=types.GenerateContentConfig(
+                    system_instruction=FINANCIAL_EXPERT_PROMPT),
+            )
             session_history[session_id] = []
             session_documents[session_id] = []
         
@@ -207,8 +217,12 @@ async def generate_report(file: UploadFile = File(...)):
         elif file.filename.lower().endswith((".xlsx", ".xls")):
             mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         
-        # Create a temporary chat session for analysis
-        analysis_session = client.chats.create(model='gemini-2.0-flash')
+        # Create a temporary chat session for analysis with expert system prompt
+        analysis_session = client.chats.create(
+            model='gemini-2.0-flash',
+            config=types.GenerateContentConfig(
+                system_instruction=FINANCIAL_EXPERT_PROMPT),
+        )
         
         # Read file data
         with open(file_path, "rb") as f:
