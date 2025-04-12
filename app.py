@@ -4,6 +4,11 @@ import json
 from typing import List, Dict
 import time
 import os
+import pkg_resources
+
+# Check for Streamlit version to handle rerun function appropriately
+st_version = pkg_resources.get_distribution("streamlit").version
+use_rerun = True  # Default to using st.rerun() for newer versions
 
 st.set_page_config(
     page_title="Financial Statement Analyzer",
@@ -67,7 +72,7 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.session_id = None
         st.session_state.documents = []
-        st.experimental_rerun()
+        st.rerun()
 
     # Add the team credit message here
     st.markdown("---") # Optional separator
@@ -208,7 +213,7 @@ if prompt:
     if uploaded_file and uploaded_file.name not in st.session_state.documents:
         response_text = process_document_chat(uploaded_file, prompt)
         # Re-run to update the sidebar with the new document name immediately
-        st.experimental_rerun()
+        st.rerun()
     else:
         response_text = process_chat(prompt)
 
@@ -218,4 +223,4 @@ if prompt:
 
     # Re-run only if it wasn't a document upload chat, to avoid double rerun
     if not (uploaded_file and uploaded_file.name in st.session_state.documents):
-         st.experimental_rerun()
+         st.rerun()

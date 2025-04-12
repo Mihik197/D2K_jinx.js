@@ -15,6 +15,7 @@ import re
 from fastapi.responses import FileResponse
 from report_generator import generate_pdf_report
 from prompts import EXTRACTION_PROMPT
+import time
 
 load_dotenv()
 
@@ -207,7 +208,7 @@ async def generate_report(file: UploadFile = File(...)):
             mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         
         # Create a temporary chat session for analysis
-        analysis_session = client.chats.create(model='gemini-2.0-flash-thinking-exp-01-21')
+        analysis_session = client.chats.create(model='gemini-2.0-flash')
         
         # Read file data
         with open(file_path, "rb") as f:
@@ -223,7 +224,23 @@ async def generate_report(file: UploadFile = File(...)):
         extraction_prompt = EXTRACTION_PROMPT
         # Send the extraction request with document context
         message_parts = [document_part, types.Part.from_text(text=extraction_prompt)]
-        extraction_response = analysis_session.send_message(message_parts)
+        
+        # Add retry logic for the model
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                extraction_response = analysis_session.send_message(message_parts)
+                break  # If successful, break the retry loop
+            except Exception as e:
+                if "503" in str(e) and "overloaded" in str(e) and attempt < max_retries-1:
+                    logging.warning(f"Gemini API overloaded, retrying in {retry_delay} seconds (attempt {attempt+1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    # If we've exhausted retries or it's a different error, re-raise
+                    raise
         
         # Process the JSON response
         json_text = extraction_response.text
@@ -249,17 +266,31 @@ async def generate_report(file: UploadFile = File(...)):
         calculated_ratios = handler.calculate_financial_ratios(extracted_data)
         
         # Generate business overview using Gemini
-        overview_prompt = f"""Based on the following extracted financial data, provide a concise business overview:
+        overview_prompt = f"""Based on the following extracted financial data, provide a concise business overview. It should be a couple paragraphs long and cover the company's financial health, performance, and any notable trends or insights. Try to focus also on the management's discussion and analysis of the financial results:
                 {json.dumps(extracted_data, indent=2)}
 
                 Output only the business overview text."""
         
-        overview_response = analysis_session.send_message(overview_prompt)
-        business_overview = overview_response.text.strip()
+        # Add retry logic for overview generation
+        for attempt in range(max_retries):
+            try:
+                overview_response = analysis_session.send_message(overview_prompt)
+                business_overview = overview_response.text.strip()
+                break
+            except Exception as e:
+                if "503" in str(e) and "overloaded" in str(e) and attempt < max_retries-1:
+                    logging.warning(f"Gemini API overloaded during overview generation, retrying in {retry_delay} seconds (attempt {attempt+1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    # If it's not a 503/overloaded error or we've exhausted retries, provide a fallback
+                    logging.error(f"Error generating business overview: {str(e)}")
+                    business_overview = "Business overview could not be generated due to AI service limitations. Please review the extracted financial data for insights."
+                    break
         
         # Generate key findings using Gemini
         findings_prompt = f"""Analyze the following extracted financial data and calculated ratios, and provide key findings 
-                with focus on profitability, liquidity, solvency, and any notable trends:
+                with focus on profitability, liquidity, solvency, and any notable trends. Each should be at least one paragraph and have high quality content:
 
                 Extracted Data:
                 {json.dumps(extracted_data, indent=2)}
@@ -269,8 +300,23 @@ async def generate_report(file: UploadFile = File(...)):
 
                 Output only the key findings text."""
         
-        findings_response = analysis_session.send_message(findings_prompt)
-        key_findings = findings_response.text.strip()
+        # Add retry logic for findings generation
+        retry_delay = 2  # Reset delay
+        for attempt in range(max_retries):
+            try:
+                findings_response = analysis_session.send_message(findings_prompt)
+                key_findings = findings_response.text.strip()
+                break
+            except Exception as e:
+                if "503" in str(e) and "overloaded" in str(e) and attempt < max_retries-1:
+                    logging.warning(f"Gemini API overloaded during findings generation, retrying in {retry_delay} seconds (attempt {attempt+1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    # If it's not a 503/overloaded error or we've exhausted retries, provide a fallback
+                    logging.error(f"Error generating key findings: {str(e)}")
+                    key_findings = "Key findings could not be generated due to AI service limitations. Please review the extracted financial data and calculated ratios for insights."
+                    break
         
         # Create report data
         report_data = {
@@ -296,7 +342,14 @@ async def generate_report(file: UploadFile = File(...)):
         if file_path:
             file_path.unlink(missing_ok=True)
         logging.exception("Error generating report")
-        raise HTTPException(status_code=500, detail=str(e))
+        
+        # Provide more helpful error message based on the exception
+        if "503" in str(e) and "overloaded" in str(e):
+            error_message = "The AI service is currently overloaded. Please try again in a few minutes."
+        else:
+            error_message = str(e)
+            
+        raise HTTPException(status_code=500, detail=error_message)
 
 
 if __name__ == "__main__":
