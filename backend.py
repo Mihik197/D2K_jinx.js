@@ -14,7 +14,7 @@ import json
 import re
 from fastapi.responses import FileResponse
 from report_generator import generate_pdf_report
-from prompts import EXTRACTION_PROMPT, FINANCIAL_EXPERT_PROMPT
+from prompts import EXTRACTION_PROMPT, FINANCIAL_EXPERT_PROMPT, ESG_EXTRACTION_PROMPT
 import time
 
 load_dotenv()
@@ -332,12 +332,78 @@ async def generate_report(file: UploadFile = File(...)):
                     key_findings = "Key findings could not be generated due to AI service limitations. Please review the extracted financial data and calculated ratios for insights."
                     break
         
+        # --- BEGIN ESG DATA EXTRACTION ---
+        extracted_esg_data = {} # Initialize as empty dict
+        esg_extraction_prompt_text = ESG_EXTRACTION_PROMPT
+        esg_message_parts = [document_part, types.Part.from_text(text=esg_extraction_prompt_text)]
+        
+        logging.info("Attempting ESG data extraction...")
+        esg_extraction_response = None
+        
+        # Use existing retry_delay or reset if needed, ensure max_retries is defined
+        # max_retries = 3 # Should be defined earlier in the function
+        # retry_delay = 2 # Should be defined earlier or reset
+        
+        for attempt in range(max_retries):
+            try:
+                esg_extraction_response = analysis_session.send_message(esg_message_parts)
+                logging.info(f"ESG extraction successful on attempt {attempt + 1}")
+                break 
+            except Exception as e:
+                logging.warning(f"Error during ESG extraction attempt {attempt + 1}/{max_retries}: {str(e)}")
+                if "503" in str(e) and "overloaded" in str(e) and attempt < max_retries - 1:
+                    logging.warning(f"ESG Gemini API overloaded, retrying in {retry_delay} seconds")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2 
+                elif attempt == max_retries - 1:
+                    logging.error(f"Failed to extract ESG data after {max_retries} attempts: {str(e)}")
+                    extracted_esg_data = {"error": f"ESG data extraction failed after {max_retries} retries: {str(e)}"}
+                    # No break here, esg_extraction_response will remain None
+                else: # Other non-retryable error or last attempt failed differently
+                    logging.error(f"Non-retryable error or final attempt failed for ESG extraction: {str(e)}")
+                    extracted_esg_data = {"error": f"ESG data extraction failed: {str(e)}"}
+                    break # Break on other errors or if it's the last attempt and not a 503
+
+        if esg_extraction_response and not extracted_esg_data.get("error"): # Check if response is valid and no error set during retries
+            esg_json_text = esg_extraction_response.text
+            try:
+                extracted_esg_data = json.loads(esg_json_text)
+                logging.info("Successfully parsed ESG JSON directly")
+            except json.JSONDecodeError:
+                logging.warning("Direct JSON parsing failed for ESG, trying to extract from markdown")
+                json_match_esg = re.search(r'```json\s*(.*?)\s*```', esg_json_text, re.DOTALL)
+                if json_match_esg:
+                    try:
+                        extracted_esg_data = json.loads(json_match_esg.group(1))
+                        logging.info("Successfully extracted and parsed ESG JSON from markdown")
+                    except json.JSONDecodeError as e_markdown:
+                        logging.error(f"ESG JSON parsing from markdown failed: {e_markdown}")
+                        extracted_esg_data = {"error": "Failed to parse ESG data from LLM response (markdown attempt)"}
+                else:
+                    # Fallback to searching for any JSON structure if markdown block not found
+                    json_match_esg_fallback = re.search(r'({[\s\S]*})', esg_json_text)
+                    if json_match_esg_fallback:
+                        try:
+                            extracted_esg_data = json.loads(json_match_esg_fallback.group(1))
+                            logging.info("Successfully extracted and parsed ESG JSON using fallback regex")
+                        except json.JSONDecodeError as e_fallback:
+                            logging.error(f"ESG JSON parsing from fallback regex failed: {e_fallback}")
+                            extracted_esg_data = {"error": "Failed to parse ESG data from LLM response (fallback attempt)"}
+                    else:
+                        logging.error("No valid JSON found in ESG LLM response")
+                        extracted_esg_data = {"error": "No valid JSON found in ESG LLM response"}
+        elif not extracted_esg_data.get("error"): # If response is None but no error was set (e.g. all retries failed silently)
+             extracted_esg_data = {"error": "ESG data extraction failed after multiple retries (no response)"}
+        logging.info(f"Final extracted_esg_data: {extracted_esg_data}")
+        # --- END ESG DATA EXTRACTION ---
+        
         # Create report data
         report_data = {
             "business_overview": business_overview,
             "key_findings": key_findings,
-            "extracted_data": extracted_data,
-            "calculated_ratios": calculated_ratios
+            "extracted_data": extracted_data, # This is financial data
+            "calculated_ratios": calculated_ratios,
+            "extracted_esg_data": extracted_esg_data # Add this new key
         }
         
         # Generate PDF report in a temporary file

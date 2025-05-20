@@ -44,6 +44,7 @@ Develop an AI-powered platform to automatically extract, analyze, and summarize 
     - Balance Sheet Data
     - Cash Flow Data
     - Notes and additional commentary
+    - ESG Data (Environmental, Social, Governance factors such as climate strategy, emissions, employee safety, board independence, etc.)
 
 ### 2.3 Financial Analysis & Ratio Calculation
 - **Standard Ratios:**  
@@ -64,6 +65,7 @@ Develop an AI-powered platform to automatically extract, analyze, and summarize 
   4. Balance Sheet Overview
   5. Adjusted EBITDA (conditional)
   6. Adjusted Working Capital (conditional)
+  7. ESG (Environmental, Social, and Governance) Insights
 - **Presentation:**  
   - Clear headings, bullet points, and structured JSON output.
 - **PDF Generation:**  
@@ -156,10 +158,11 @@ Develop an AI-powered platform to automatically extract, analyze, and summarize 
      - Extract financial figures.
      - Calculate financial ratios and perform trend analysis.
      - Detect anomalies and assess risk.
+     - Extract relevant ESG (Environmental, Social, and Governance) information.
    - Merge outputs into a comprehensive analysis JSON.
 
 4. **Report Assembly:**
-   - Combine structured data into the final report.
+   - Combine structured financial and ESG data into the final report.
    - Render in Streamlit for review and export to PDF.
 
 5. **Interactive Features:**
@@ -205,6 +208,7 @@ Develop an AI-powered platform to automatically extract, analyze, and summarize 
 - [ ] Develop multi-step prompt chains (consider using LangChain).
 - [ ] Create a Streamlit prototype for UI testing and file uploads.
 - [ ] Implement financial ratio calculations and trend analysis.
+- [x] Implement ESG data extraction and reporting (Environmental, Social, Governance).
 - [ ] Integrate advanced risk analysis features:
   - Anomaly detection.
   - Comparative benchmarking.

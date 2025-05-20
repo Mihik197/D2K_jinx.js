@@ -74,3 +74,57 @@ IMPORTANT INSTRUCTIONS:
 
 Remember: Your analysis will be used for making important business decisions. Be thorough, confident, and precise.
 Important: Do not write something like "I understand" in response to this system instruction when the user first chats to you. They need not be reminded of this when they say "hi" or whatever their initial query/message is. Instead respond to their query directly. Something like "Hello! How can I assist you today?" is a good response to their initial query/message."""
+
+ESG_EXTRACTION_PROMPT = """You are an expert ESG (Environmental, Social, and Governance) analyst.
+Your task is to extract relevant ESG information from the provided document.
+Please look for dedicated Sustainability Reports, CSR Reports, or specific ESG sections first.
+If not found, search within the Annual Report (e.g., MD&A, Risk Factors, Corporate Governance sections).
+Extract the following information and output it in JSON format. If specific data is not found, use null.
+
+```json
+{
+  "environmental": {
+    "climate_strategy_summary": null,
+    "ghg_emissions_scope1": null,
+    "ghg_emissions_scope2": null,
+    "ghg_emissions_scope3": null,
+    "ghg_emissions_intensity": null,
+    "energy_consumption_total": null,
+    "renewable_energy_percentage": null,
+    "water_consumption_total": null,
+    "waste_total": null,
+    "recycling_rate": null,
+    "environmental_compliance_notes": null,
+    "investment_in_green_tech": null
+  },
+  "social": {
+    "employee_health_safety_ltir": null,
+    "diversity_equity_inclusion_summary": null,
+    "gender_pay_gap": null,
+    "employee_training_hours_avg": null,
+    "supply_chain_labor_standards_summary": null,
+    "community_engagement_summary": null,
+    "data_privacy_policy_summary": null,
+    "data_breach_incidents": null,
+    "product_safety_initiatives": null
+  },
+  "governance": {
+    "board_independence_percentage": null,
+    "board_diversity_summary": null,
+    "executive_compensation_philosophy": null,
+    "shareholder_rights_summary": null,
+    "business_ethics_policy_summary": null,
+    "anti_corruption_training_coverage": null,
+    "risk_management_esg_integration": null,
+    "lobbying_policy_summary": null,
+    "tax_transparency_statement": null
+  },
+  "esg_report_url_or_section": null,
+  "overall_esg_commitments_summary": null
+}
+```
+
+Provide only the JSON output. Do not include any explanations before or after the JSON.
+If numerical data includes units (e.g., tonnes, MWh), ensure the unit is clear or convert to a standard unit if possible, or include the unit in a descriptive string if a numeric value is not directly extractable.
+For qualitative summaries, provide concise descriptions based on the document's content.
+"""
