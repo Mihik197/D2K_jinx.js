@@ -19,6 +19,12 @@ from datetime import datetime
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for server environments
 
+def format_esg_key(key_name: str) -> str:
+    """Converts a snake_case string to Title Case."""
+    if not key_name:
+        return ""
+    return " ".join(word.capitalize() for word in key_name.split("_"))
+
 # Custom flowable for page headers and footers
 class HeaderFooter(Flowable):
     def __init__(self, width, height, report_info):
@@ -354,7 +360,9 @@ def generate_pdf_report(report_data: dict, output_path: str):
         ("   3.4 Efficiency Ratios", "8"),
         ("4. Financial Statements", "9"),
         ("   4.1 Income Statement", "9"),
-        ("   4.2 Balance Sheet", "10")
+        ("   4.2 Balance Sheet", "10"),
+        ("5. Additional Analysis", "11"), # Assuming notes section exists
+        ("6. ESG Insights", "12") # Placeholder page, adjust if dynamic TOC is implemented
     ]
     
     toc_data = [[item, page] for item, page in toc_items]
@@ -851,6 +859,85 @@ def generate_pdf_report(report_data: dict, output_path: str):
                 wc_details = notes.get("adj_working_capital_details", "No details provided.")
                 story.append(Paragraph(wc_details, body_style))
                 story.append(Spacer(1, 0.2 * inch))
+
+    # --- ESG Insights Section ---
+    # Check if ESG data is available before adding the page break and title
+    extracted_esg_data = report_data.get("extracted_esg_data", {})
+    
+    # Only add ESG section if there is data or a specific error message to display for ESG
+    if extracted_esg_data: 
+        story.append(PageBreak())
+        story.append(Paragraph("6. ESG (Environmental, Social, and Governance) Insights", heading1_style))
+        story.append(HorizontalRule(450, thickness=2, color=colors.lightsteelblue))
+        story.append(Spacer(1, 0.15 * inch))
+
+        if isinstance(extracted_esg_data, dict) and "error" in extracted_esg_data:
+            story.append(Paragraph(f"Could not generate ESG insights: {extracted_esg_data['error']}", body_style))
+        else:
+            esg_categories = {
+                "environmental": "6.1 Environmental",
+                "social": "6.2 Social",
+                "governance": "6.3 Governance"
+            }
+            
+            esg_data_presented = False # Flag to check if any ESG data was actually presented
+
+            for category_key, section_title in esg_categories.items():
+                sub_category_data = extracted_esg_data.get(category_key) # Use .get() for safety
+                
+                # Ensure sub_category_data is a dictionary before trying to iterate
+                if isinstance(sub_category_data, dict) and sub_category_data:
+                    story.append(Paragraph(section_title, heading2_style))
+                    esg_table_data = []
+                    for k, v in sub_category_data.items():
+                        formatted_value = str(v) if v is not None and str(v).strip() != "" else "N/A"
+                        if len(formatted_value) > 150: # Truncate long strings
+                            formatted_value = formatted_value[:147] + "..."
+                        esg_table_data.append([format_esg_key(k), formatted_value])
+                    
+                    if not esg_table_data:
+                        story.append(Paragraph("No data available for this sub-category.", body_style))
+                    else:
+                        esg_table_data.insert(0, [format_esg_key(category_key) + " Factor", "Details"])
+                        
+                        esg_table = Table(esg_table_data, colWidths=[2.5*inch, 3.5*inch]) # Adjusted colWidths
+                        esg_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.cornflowerblue),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 10),
+                            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                            ('ALIGN', (0, 1), (0, -1), 'LEFT'), 
+                            ('ALIGN', (1, 1), (1, -1), 'LEFT'), 
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
+                        ]))
+                        story.append(esg_table)
+                        esg_data_presented = True
+                    story.append(Spacer(1, 0.2 * inch))
+                elif sub_category_data is None or (isinstance(sub_category_data, dict) and not sub_category_data) : # Explicitly handle None or empty dict
+                    story.append(Paragraph(section_title, heading2_style))
+                    story.append(Paragraph("No data available for this sub-category.", body_style))
+                    story.append(Spacer(1, 0.2 * inch))
+            
+            overall_summary = extracted_esg_data.get("overall_esg_commitments_summary")
+            if overall_summary and isinstance(overall_summary, str) and overall_summary.strip():
+                story.append(Paragraph("6.4 Overall ESG Commitments", heading2_style))
+                story.append(Paragraph(overall_summary, body_style))
+                story.append(Spacer(1, 0.2 * inch))
+                esg_data_presented = True
+            elif "overall_esg_commitments_summary" in extracted_esg_data and not overall_summary: # Key exists but value is None/empty
+                story.append(Paragraph("6.4 Overall ESG Commitments", heading2_style))
+                story.append(Paragraph("No overall ESG commitments summary provided.", body_style))
+                story.append(Spacer(1, 0.2 * inch))
+                esg_data_presented = True
+
+
+            if not esg_data_presented and not (isinstance(extracted_esg_data, dict) and "error" in extracted_esg_data):
+                # This message is if no specific ESG data points were found AND no error message was already shown.
+                story.append(Paragraph("No specific ESG data points were found in the document.", body_style))
     
     # Add footnote
     story.append(Spacer(1, inch))
